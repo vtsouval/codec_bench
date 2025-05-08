@@ -1,9 +1,9 @@
 import torch
 import datasets
 try:
-	from .utils import BaseProcessorFn, preprocess_samples, train_test_split, load_tokenizer, load_codec
+	from .utils import BaseProcessorFn, preprocess_samples, load_tokenizer, load_codec
 except ImportError:
-	from utils import BaseProcessorFn, preprocess_samples, train_test_split, load_tokenizer, load_codec
+	from utils import BaseProcessorFn, preprocess_samples, load_tokenizer, load_codec
 
 class ProcessorFn(BaseProcessorFn):
 
@@ -55,24 +55,39 @@ class ProcessorFn(BaseProcessorFn):
 		return [start_token_id] + list((speech_tokens.cpu() + base_num).view(-1)) + [end_token_id]
 
 	def extract_text_tokens(self, x):
-		return self.label_to_tokens[x.item()]
+		return self.label_to_tokens[x]
 
 	def __call__(self, x):
 		audio_tk = self.extract_audio_tokens(x["waveform"])
 		text_tk = self.extract_text_tokens(x['label'])
 		return self._combine_tokens(x_0=audio_tk, x_1=text_tk, pad_token_id=self.pad_token_id, extra_pad=self.extra_pad, pad_to_max_length=False)
 
-def load_ds(hf_repo="gilkeyio/AudioMNIST", preprocess_fn=preprocess_samples, max_size=None, seed=42):
-	ds = datasets.load_dataset(hf_repo)
-	ds = ds.map(preprocess_fn, remove_columns=ds["train"].column_names)
-	class_names = list(set(ds["train"]["label"]))
-	ds = train_test_split(ds, label_key='label', max_size=max_size, seed=seed)
+def load_ds(hf_repo="danavery/urbansound8K", fold=1, preprocess_fn=preprocess_samples, label_key='class'):
+	_map = {
+		1: {'train': [3, 4, 5, 6, 7, 8, 9, 10], 'val': [2], 'test': [1]},
+		2: {'train': [1, 3, 4, 5, 6, 7, 8, 9], 'val': [3], 'test': [2]},
+		3: {'train': [1, 2, 4, 5, 6, 7, 8, 9], 'val': [4], 'test': [3]},
+		4: {'train': [1, 2, 3, 5, 6, 7, 8, 9], 'val': [5], 'test': [4]},
+		5: {'train': [1, 2, 3, 4, 6, 7, 8, 9], 'val': [6], 'test': [5]},
+		6: {'train': [1, 2, 3, 4, 5, 7, 8, 9], 'val': [7], 'test': [6]},
+		7: {'train': [1, 2, 3, 4, 5, 6, 8, 9], 'val': [8], 'test': [7]},
+		8: {'train': [1, 2, 3, 4, 5, 6, 7, 9], 'val': [9], 'test': [8]},
+		9: {'train': [1, 2, 3, 4, 5, 6, 7, 8], 'val': [10], 'test': [9]},
+		10: {'train': [1, 2, 3, 4, 5, 6, 7, 8], 'val': [1], 'test': [10]},
+	}
+	ds = datasets.load_dataset(hf_repo)['train'].map(lambda e: {label_key: e[label_key].replace("_", " ")})
+	ds = datasets.DatasetDict({'train': ds.filter(lambda e: e['fold'] in  _map[fold]['train']), 'val': ds.filter(lambda e: e['fold'] in  _map[fold]['val']), 'test': ds.filter(lambda e: e['fold'] in  _map[fold]['test'])})
+	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', label_key]])
+	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', label_key]])
+	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', label_key]])
+	class_names = list(set(ds["train"][label_key]))
+	ds = ds.map(lambda x: preprocess_fn(x, label_key=label_key, one_hot_labels=False), remove_columns=ds["train"].column_names).with_format("torch")
 	return ds, class_names
 
 if __name__ == "__main__":
-	ds, class_names = load_ds(hf_repo="gilkeyio/AudioMNIST", max_size=None)
+	ds, class_names = load_ds(hf_repo="danavery/urbansound8K")
 	audio_codec, tokenizer = load_codec(), load_tokenizer()
 	preprocess_fn = ProcessorFn(class_names, audio_codec, tokenizer)
 	ds = ds.map(preprocess_fn, remove_columns=["waveform", "label"], batched=False).with_format("torch")
-	ds.save_to_disk("../audiomnist")
+	ds.save_to_disk("../us8k")
 

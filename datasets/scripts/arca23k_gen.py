@@ -1,3 +1,5 @@
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import torch
 import datasets
 try:
@@ -62,21 +64,23 @@ class ProcessorFn(BaseProcessorFn):
 		text_tk = self.extract_text_tokens(x['label'])
 		return self._combine_tokens(x_0=audio_tk, x_1=text_tk, pad_token_id=self.pad_token_id, extra_pad=self.extra_pad, pad_to_max_length=False)
 
-def load_ds(hf_repo="ashraq/esc50", fold=2, preprocess_fn=preprocess_samples, **kwargs):
-	_map = {1: {'train': [2, 3, 4], 'val': [5], 'test': [1]}, 2: {'train': [3, 4, 5], 'val': [1], 'test': [2]}, 3: {'train': [1, 4, 5], 'val': [2], 'test': [3]}, 4: {'train': [1, 2, 5], 'val': [3], 'test': [4]}, 5: {'train': [1, 2, 3], 'val': [4], 'test': [5]},}
-	ds = datasets.load_dataset(hf_repo)['train'].map(lambda e: {"category": e["category"].replace("_", " ")})
-	ds = datasets.DatasetDict({'train': ds.filter(lambda e: e['fold'] in  _map[fold]['train']), 'val': ds.filter(lambda e: e['fold'] in  _map[fold]['val']), 'test': ds.filter(lambda e: e['fold'] in  _map[fold]['test'])})
-	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', 'category']])
-	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', 'category']])
-	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', 'category']])
-	class_names = list(set(ds["train"]["category"]))
-	ds = ds.map(lambda x: preprocess_fn(x, label_key="category", one_hot_labels=False), remove_columns=ds["train"].column_names).with_format("torch")
+def load_ds(hf_repo="vtsouval/arca23k-fsd", preprocess_fn=preprocess_samples, label_key="action", **kwargs):
+	_map = {"Acoustic_guitar": "Acoustic guitar", "Bark": "Bark", "Bass_guitar": "Bass guitar", "Boom": "Boom", "Bowed_string_instrument": "Bowed string", "Burping_and_eructation": "Burping", "Camera": "Camera", "Chewing_and_mastication": "Chewing", "Child_speech_and_kid_speaking": "Child speech", "Clapping": "Clapping", "Coin_(dropping)": "Coin drop", "Computer_keyboard": "Keyboard", "Cough": "Cough", "Crack": "Crack", "Crackle": "Crackle", "Crash_cymbal": "Crash cymbal", "Cricket": "Cricket", "Crumpling_and_crinkling": "Crumpling", "Crushing": "Crushing", "Crying_and_sobbing": "Crying", "Dishes_and_pots_and_pans": "Kitchen sounds", "Drawer_open_or_close": "Drawer", "Drill": "Drill", "Electric_guitar": "Electric guitar", "Fart": "Fart", "Female_singing": "Female singing", "Female_speech_and_woman_speaking": "Female speech", "Finger_snapping": "Finger snap", "Giggle": "Giggle", "Gong": "Gong", "Gunshot_and_gunfire": "Gunshot", "Hammer": "Hammer", "Harp": "Harp", "Keys_jangling": "Keys", "Knock": "Knock", "Livestock_and_farm_animals_and_working_animals": "Farm animals", "Male_speech_and_man_speaking": "Male speech", "Meow": "Meow", "Microwave_oven": "Microwave", "Organ": "Organ", "Piano": "Piano", "Printer": "Printer", "Rattle": "Rattle", "Rattle_(instrument)": "Rattle instrument", "Run": "Running", "Sawing": "Sawing", "Scissors": "Scissors", "Scratching_(performance_technique)": "Scratching", "Screaming": "Screaming", "Skateboard": "Skateboard", "Slam": "Slam", "Snare_drum": "Snare drum", "Splash_and_splatter": "Splash", "Squeak": "Squeak", "Stream": "Stream", "Tap": "Tap", "Tearing": "Tearing", "Thump_and_thud": "Thump", "Toilet_flush": "Toilet flush", "Train": "Train", "Trumpet": "Trumpet", "Walk_and_footsteps": "Footsteps", "Water_tap_and_faucet": "Water tap", "Waves_and_surf": "Waves", "Whoosh_and_swoosh_and_swish": "Whoosh", "Wind": "Wind", "Wind_chime": "Wind chime", "Wind_instrument_and_woodwind_instrument": "Wind instrument", "Writing": "Writing", "Zipper_(clothing)": "Zipper"}
+	ds = datasets.load_dataset(hf_repo)
+	label_feature = ds["train"].features["label"]
+	ds = ds.map(lambda x: {"full_name": label_feature.int2str(x["label"])})
+	ds = ds.map(lambda x: {label_key: _map[x["full_name"]]})
+	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', label_key]])
+	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', label_key]])
+	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', label_key]])
+	class_names = list(set(ds["train"][label_key]))
+	ds = ds.map(lambda x: preprocess_fn(x, label_key=label_key, one_hot_labels=False), remove_columns=ds["train"].column_names).with_format("torch")
 	return ds, class_names
 
 if __name__ == "__main__":
-	ds, class_names = load_ds(hf_repo="ashraq/esc50")
+	ds, class_names = load_ds(hf_repo="vtsouval/arca23k-fsd")
 	audio_codec, tokenizer = load_codec(), load_tokenizer()
 	preprocess_fn = ProcessorFn(class_names, audio_codec, tokenizer)
 	ds = ds.map(preprocess_fn, remove_columns=["waveform", "label"], batched=False).with_format("torch")
-	ds.save_to_disk("../esc50")
+	ds.save_to_disk("../arca23k-fsd")
 

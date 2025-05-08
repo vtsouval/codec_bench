@@ -62,21 +62,36 @@ class ProcessorFn(BaseProcessorFn):
 		text_tk = self.extract_text_tokens(x['label'])
 		return self._combine_tokens(x_0=audio_tk, x_1=text_tk, pad_token_id=self.pad_token_id, extra_pad=self.extra_pad, pad_to_max_length=False)
 
-def load_ds(hf_repo="ashraq/esc50", fold=2, preprocess_fn=preprocess_samples, **kwargs):
-	_map = {1: {'train': [2, 3, 4], 'val': [5], 'test': [1]}, 2: {'train': [3, 4, 5], 'val': [1], 'test': [2]}, 3: {'train': [1, 4, 5], 'val': [2], 'test': [3]}, 4: {'train': [1, 2, 5], 'val': [3], 'test': [4]}, 5: {'train': [1, 2, 3], 'val': [4], 'test': [5]},}
-	ds = datasets.load_dataset(hf_repo)['train'].map(lambda e: {"category": e["category"].replace("_", " ")})
-	ds = datasets.DatasetDict({'train': ds.filter(lambda e: e['fold'] in  _map[fold]['train']), 'val': ds.filter(lambda e: e['fold'] in  _map[fold]['val']), 'test': ds.filter(lambda e: e['fold'] in  _map[fold]['test'])})
-	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', 'category']])
-	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', 'category']])
-	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', 'category']])
-	class_names = list(set(ds["train"]["category"]))
-	ds = ds.map(lambda x: preprocess_fn(x, label_key="category", one_hot_labels=False), remove_columns=ds["train"].column_names).with_format("torch")
+def load_ds(hf_repo="narad/ravdess", fold=1, preprocess_fn=preprocess_samples, label_key='emotion'):
+	_map = {
+		1: {'train': [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], 'val': [3, 4], 'test': [1, 2]},
+		2: {'train': [1, 2, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], 'val': [5, 6], 'test': [3, 4]},
+		3: {'train': [1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], 'val': [7, 8], 'test': [5, 6]},
+		4: {'train': [1, 2, 3, 4, 5, 6, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], 'val': [9, 10], 'test': [7, 8]},
+		5: {'train': [1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], 'val': [11, 12], 'test': [9, 10]},
+		6: {'train': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], 'val': [13, 14], 'test': [11, 12]},
+		7: {'train': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 17, 18, 19, 20, 21, 22, 23, 24], 'val': [15, 16], 'test': [13, 14]},
+		8: {'train': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 19, 20, 21, 22, 23, 24], 'val': [17, 18], 'test': [15, 16]},
+		9: {'train': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 21, 22, 23, 24], 'val': [19, 20], 'test': [17, 18]},
+		10: {'train': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 23, 24], 'val': [21, 22], 'test': [19, 20]},
+		11: {'train': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], 'val': [23, 24], 'test': [21, 22]},
+		12: {'train': [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22], 'val': [1, 2], 'test': [23, 24]},
+	}
+	_emap = {0: "neutral", 1: "calm", 2: "happy", 3: "sad", 4: "angry", 5: "fearful", 6: "disgust", 7: "surprised"}
+	ds = datasets.load_dataset(hf_repo)['train'].map(lambda x: {label_key: _emap[int(x["labels"])]})
+	ds =ds.map(lambda x: {"speaker_id": int(x["speaker_id"])} if x["speaker_id"].isdigit() else x)
+	ds = datasets.DatasetDict({'train': ds.filter(lambda e: e['speaker_id'] in  _map[fold]['train']), 'val': ds.filter(lambda e: e['speaker_id'] in  _map[fold]['val']), 'test': ds.filter(lambda e: e['speaker_id'] in  _map[fold]['test'])})
+	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', label_key]])
+	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', label_key]])
+	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', label_key]])
+	class_names = list(set(ds["train"][label_key]))
+	ds = ds.map(lambda x: preprocess_fn(x, label_key=label_key, one_hot_labels=False), remove_columns=ds["train"].column_names).with_format("torch")
 	return ds, class_names
 
 if __name__ == "__main__":
-	ds, class_names = load_ds(hf_repo="ashraq/esc50")
+	ds, class_names = load_ds(hf_repo="narad/ravdess")
 	audio_codec, tokenizer = load_codec(), load_tokenizer()
 	preprocess_fn = ProcessorFn(class_names, audio_codec, tokenizer)
 	ds = ds.map(preprocess_fn, remove_columns=["waveform", "label"], batched=False).with_format("torch")
-	ds.save_to_disk("../esc50")
+	ds.save_to_disk("../ravdess")
 
