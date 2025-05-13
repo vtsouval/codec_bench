@@ -36,12 +36,14 @@ class CustomTrainer:
 		label_names: str = "labels",
 		load_best_model_at_end: bool = True,
 		overwrite_output_dir: bool = True,
+		save_total_limit: int = 1,
 	):
+		self.thresholds = {'train_loss_ths':1e-5, 'train_acc_ths': None, 'val_acc_ths': 0.99999, 'val_loss': 1e-5}
 		self.model = model
 		self.tokenizer = tokenizer
 		self.optimizer = optimizer
 		self.lr_scheduler_type = lr_scheduler_type
-		self.scheduler = self.lr_scheduler_type if self.lr_scheduler_type is not None else None
+		self.scheduler = None
 		self.warmup_ratio = warmup_ratio
 		self.max_grad_norm = max_grad_norm
 		self.num_train_epochs = num_train_epochs
@@ -55,6 +57,7 @@ class CustomTrainer:
 		self.best_metric = -float("inf") if self.metric_for_best_model == "eval_acc" else float("inf")
 		self.total_training_steps = None
 		self.early_stopper = next((cb for cb in self.callbacks if isinstance(cb, EarlyStoppingCallback)), None)
+		self.save_total_limit = save_total_limit
 		self.state = TrainerState()
 		self.control = TrainerControl()
 		self.epoch = 0
@@ -94,58 +97,77 @@ class CustomTrainer:
 		checkpoint_dirs.sort(key=lambda x: int(x.split("-")[-1]))
 		return checkpoint_dirs[-1]
 
+	def _maybe_stop_training(self, train_metrics=None, eval_metrics=None):
+		reasons = []
+		if train_metrics:
+			if self.thresholds.get("train_loss_ths") is not None and "loss" in train_metrics:
+				if train_metrics["loss"] < self.thresholds["train_loss_ths"]:
+					reasons.append(f"train_loss={train_metrics['loss']:.6f} < {self.thresholds['train_loss_ths']}")
+			if self.thresholds.get("train_acc_ths") is not None and "acc" in train_metrics:
+				if train_metrics["acc"] > self.thresholds["train_acc_ths"]:
+					reasons.append(f"train_acc={train_metrics['acc']:.4f} > {self.thresholds['train_acc_ths']}")
+		if eval_metrics:
+			if self.thresholds.get("val_loss_ths") is not None and "eval_loss" in eval_metrics:
+				if eval_metrics["eval_loss"] < self.thresholds["val_loss_ths"]:
+					reasons.append(f"val_loss={eval_metrics['eval_loss']:.6f} < {self.thresholds['val_loss_ths']}")
+			if self.thresholds.get("val_acc_ths") is not None and "eval_acc" in eval_metrics:
+				if eval_metrics["eval_acc"] > self.thresholds["val_acc_ths"]:
+					reasons.append(f"val_acc={eval_metrics['eval_acc']:.4f} > {self.thresholds['val_acc_ths']}")
+		if reasons:
+			print("🛑 Early stopping triggered based on custom thresholds:")
+			for reason in reasons:
+				print(f" - {reason}")
+			return True
+		return False
+
 	def train(self, train_ds, eval_ds):
 		if self.total_training_steps is None:
 			self.total_training_steps = self.num_train_epochs * len(train_ds)
-
-		if self.scheduler is not None:
-			self.scheduler = get_scheduler(self.scheduler, optimizer=self.optimizer,
+		if self.scheduler is None and self.lr_scheduler_type is not None:
+			self.scheduler = get_scheduler(self.lr_scheduler_type, optimizer=self.optimizer,
 				num_warmup_steps=int(self.warmup_ratio * self.total_training_steps), num_training_steps=self.total_training_steps,)
-
 		self.global_step = getattr(self, "global_step", getattr(self.state, "global_step", 0))
 		self.epoch = getattr(self.state, "epoch", 0)
 		progress_bar = tqdm(total=self.total_training_steps, desc="Training", initial=self.global_step)
-
 		for epoch in range(self.epoch, self.num_train_epochs):
 			self.model.train()
 			_loss, _acc = 0.0, 0.0
 			for batch in train_ds:
+				eval_metrics = None
 				self.global_step += 1
 				self.state.global_step = self.global_step
 				self.state.epoch = epoch
-
 				metrics = self.train_batch(batch)
 				_loss += metrics['loss']
 				_acc += metrics['acc']
-
 				self.writer.add_scalar("train/loss", metrics['loss'], self.global_step)
 				self.writer.add_scalar("train/acc", metrics['acc'], self.global_step)
 				progress_bar.set_postfix(loss=f"{metrics['loss']:.4f}", acc=f"{100. * metrics['acc']:.2f}")
 				progress_bar.update(1)
-
-				if (self.global_step % self.eval_steps == 0) or (self.global_step == self.total_training_steps):
+				if (self.global_step % self.eval_steps == 0) or (self.global_step == self.total_training_steps): 
 					eval_metrics = self.evaluate(eval_ds)
 					print(f"\n[Step {self.global_step}/{self.total_training_steps}] - "
 						f"train_loss: {_loss / self.global_step:.4f}, train_acc: {100. * _acc / self.global_step:.2f}% | "
 						f"val_loss: {eval_metrics['eval_loss']:.4f}, val_acc: {100. * eval_metrics['eval_acc']:.2f}% | "
 						f"lr: {self.optimizer.param_groups[0]['lr']:.6e}")
-
 					self.writer.add_scalar("eval/loss", eval_metrics['eval_loss'], self.global_step)
 					self.writer.add_scalar("eval/acc", eval_metrics['eval_acc'], self.global_step)
-
 					current = eval_metrics[self.metric_for_best_model]
 					improved = current > self.best_metric if self.metric_for_best_model == "eval_acc" else current < self.best_metric
 					if improved:
 						self.best_metric = current
 						self.state.best_metric = current
 						self.save_checkpoint(self.global_step)
-
 					if self.early_stopper:
 						self.early_stopper.on_evaluate(self.args, self.state, self.control, eval_metrics)
 						if self.control.should_training_stop:
 							print("Early stopping triggered.")
 							progress_bar.close()
 							return
+				if self._maybe_stop_training(train_metrics={"loss": _loss / self.global_step, "acc": _acc / self.global_step}, eval_metrics=eval_metrics):
+					self.save_checkpoint(self.global_step)
+					progress_bar.close()
+					return
 		progress_bar.close()
 
 	def train_batch(self, batch):
@@ -154,7 +176,7 @@ class CustomTrainer:
 		autocast_dtype = torch.bfloat16 if self.precision == "bf16" else torch.float16 if self.precision == "fp16" else torch.float32
 		with torch.autocast("cuda", dtype=autocast_dtype):
 			logits = self.model(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]).logits
-			logits, labels = logits.view(-1, self.tokenizer._vocab_size), batch[self.label_names].view(-1)
+			logits, labels = logits.view(-1, self.tokenizer.vocab_size_override), batch[self.label_names].view(-1)
 			log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
 			loss = torch.nn.functional.nll_loss(log_probs, labels, ignore_index=-100)
 
@@ -181,7 +203,7 @@ class CustomTrainer:
 		for batch in tqdm(ds, desc="Evaluating"):
 			batch = {k: v.to(self.model.device, non_blocking=True) for k, v in batch.items()}
 			logits = self.model(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]).logits
-			logits, labels = logits.view(-1, self.tokenizer._vocab_size), batch[self.label_names].view(-1)
+			logits, labels = logits.view(-1, self.tokenizer.vocab_size_override), batch[self.label_names].view(-1)
 			log_probs = torch.nn.functional.log_softmax(logits, dim=-1)
 			loss = torch.nn.functional.nll_loss(log_probs, labels, ignore_index=-100)
 			_loss += loss.item()
@@ -190,35 +212,73 @@ class CustomTrainer:
 
 	def save_checkpoint(self, step):
 		path = os.path.join(self.output_dir, f"checkpoint-{step}")
+
+		if os.path.exists(path):
+			print(f"⚠️ Checkpoint already exists at {path}, skipping save.")
+			return
+
 		os.makedirs(path, exist_ok=True)
+
 		# Save model and tokenizer
 		self.model.save_pretrained(path)
 		self.tokenizer.save_pretrained(path)
+
 		# Save optimizer and scheduler state
 		torch.save(self.optimizer.state_dict(), os.path.join(path, "optimizer.pt"))
 		if self.scheduler:
 			torch.save(self.scheduler.state_dict(), os.path.join(path, "scheduler.pt"))
+
 		# Save scaler
 		if self.precision in ["fp16", "bf16"]:
 			torch.save(self.scaler.state_dict(), os.path.join(path, "scaler.pt"))
+
 		# Save training args
 		torch.save(self.args.__dict__, os.path.join(path, "training_args.bin"))
+
 		# Save training state
 		self.state.global_step = self.global_step
 		self.state.epoch = self.epoch
 		self.state.best_metric = self.best_metric
 		torch.save(self.state, os.path.join(path, "trainer_state.pt"))
-		# Scheduler
+
+		# Save scheduler config
 		with open(os.path.join(path, "scheduler_config.json"), "w") as f:
-			json.dump({"name": self.lr_scheduler_type, "num_training_steps": self.total_training_steps, "num_warmup_steps": int(self.warmup_ratio * self.total_training_steps),}, f, indent=2)
-		# Metadata
+			json.dump({
+				"name": self.lr_scheduler_type,
+				"num_training_steps": self.total_training_steps,
+				"num_warmup_steps": int(self.warmup_ratio * self.total_training_steps),
+			}, f, indent=2)
+
+		# Save metadata
 		with open(os.path.join(path, "metadata.json"), "w") as f:
-			json.dump({"step": step, "epoch": self.epoch, "best_metric": self.best_metric, "precision": self.precision,}, f, indent=2)
+			json.dump({
+				"step": step,
+				"epoch": self.epoch,
+				"best_metric": self.best_metric,
+				"precision": self.precision,
+			}, f, indent=2)
+
 		print(f"Checkpoint saved at: {path}")
+
+		# 🔽 NEW: Remove older checkpoints if exceeding save_total_limit
+		if self.save_total_limit is not None and self.save_total_limit > 0:
+			checkpoints = [
+				os.path.join(self.output_dir, d)
+				for d in os.listdir(self.output_dir)
+				if d.startswith("checkpoint-") and os.path.isdir(os.path.join(self.output_dir, d))
+			]
+			checkpoints = sorted(checkpoints, key=lambda x: int(x.split("-")[-1]))
+
+			if len(checkpoints) > self.save_total_limit:
+				num_to_delete = len(checkpoints) - self.save_total_limit
+				for ckpt_to_delete in checkpoints[:num_to_delete]:
+					shutil.rmtree(ckpt_to_delete)
+					print(f"Deleted old checkpoint: {ckpt_to_delete}")
 
 	def load_checkpoint(self, checkpoint_path):
 		self.model = self.model.from_pretrained(checkpoint_path)
 		self.tokenizer = self.tokenizer.from_pretrained(checkpoint_path)
+		self.tokenizer.vocab_size_override = 193800
 		optimizer_path = os.path.join(checkpoint_path, "optimizer.pt")
 		if os.path.exists(optimizer_path):
 			self.optimizer.load_state_dict(torch.load(optimizer_path))
@@ -248,7 +308,7 @@ class CustomTrainer:
 		# Load training state
 		state_path = os.path.join(checkpoint_path, "trainer_state.pt")
 		if os.path.exists(state_path):
-			self.state = torch.load(state_path)
+			self.state = torch.load(state_path, weights_only=False)
 			self.global_step, self.epoch = getattr(self.state, "global_step", 0), getattr(self.state, "epoch", 0)
 			self.best_metric = getattr(self.state, "best_metric", -float("inf") if self.metric_for_best_model == "eval_acc" else float("inf"))
 		else:

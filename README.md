@@ -14,7 +14,7 @@ We benchmark our system on the **ARCH benchmark**, which comprises a wide variet
 
 - **Audio Codec**: `XCodec2` (neural codec pretrained on speech/audio)
 - **LLM Backbone**: `Llasa-1B-Multilingual`
-- **Prompt Style**: `<|TEXT_UNDERSTANDING_START|>Classify the audio in the following segment.<|TEXT_UNDERSTANDING_END|> → Label`
+- **Prompt Style**:  `<|TEXT_UNDERSTANDING_START|> Classify the audio in the following segment. <|TEXT_UNDERSTANDING_END|> → LABEL`
 
 ---
 
@@ -26,19 +26,35 @@ We benchmark our system on the **ARCH benchmark**, which comprises a wide variet
 
 ---
 
-## 📚 ARCH Benchmark Datasets
+## 📚 Benchmark Datasets
 
-| Dataset           | Type         | Domain       | Integrated |
-|------------------|--------------|--------------|------------|
-| ESC-50           | Single-label | Sound events | ☐          |
-| US8K             | Single-label | Sound events | ☐          |
-| FSD50K           | Single-label | Sound events | ☐          |
-| VIVAE            | Single-label | Sound events | ☐          |
-| FMA-small        | Single-label | Music        | ☐          |
-| Medley-solos-DB  | Single-label | Music        | ☐          |
-| RAVDESS          | Single-label | Speech       | ☐          |
-| AudioMNIST       | Single-label | Speech       | ✅         |
-| SLURP            | Single-label | Speech       | ☐          |
-| EMOVO            | Single-label | Speech       | ☐          |
+| Dataset           | Type         | Domain         | Integrated |
+|------------------|--------------|----------------|------------|
+| ESC-50           | Single-label | Sound events   | ✅         |
+| UrbanSound8K     | Single-label | Sound events   | ✅         |
+| VIVAE            | Single-label | Sound events   | ✅         |
+| CREMA-D          | Single-label | Paralinguistic | ✅         |
+| RAVDESS          | Single-label | Paralinguistic | ✅         |
+| GTZAN            | Single-label | Paralinguistic | ✅         |
+| Medley-Solos-DB  | Single-label | Music          | ✅         |
+| AudioMNIST       | Single-label | Speech         | ✅         |
+| EMOVO            | Single-label | Speech         | ✅         |
+| SLURP            | Single-label | Speech         | ✅         |
+| TIMIT            | Single-label | Speech         | ✅         |
+| MSDB             | Single-label | Music          | ✅         |
 
 ---
+
+## 📊 Performance Overview
+
+<p align="center">
+  <img src="./assets/radar.png" alt="Radar plot of evaluation accuracy across datasets" style="width: 100%; max-width: 800px;"/>
+</p>
+
+---
+
+## 🚧 TODO
+
+- [ ] Add VCTK and MTG-Jamendo datasets
+- [ ] Benchmark against waveform and spectrogram-based LLMs
+- [ ] Add support for Audio Question Answering (Clotho-AQA)

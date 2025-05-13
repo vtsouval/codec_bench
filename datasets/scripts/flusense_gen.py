@@ -1,11 +1,9 @@
 import torch
 import datasets
 try:
-	from .utils import BaseProcessorFn, load_tokenizer, load_codec, train_test_split, preprocess_samples
+	from .utils import BaseProcessorFn, preprocess_samples, load_tokenizer, load_codec, train_test_split
 except ImportError:
-	from utils import BaseProcessorFn, load_tokenizer, load_codec, train_test_split, preprocess_samples
-import numpy as np
-from scipy.signal import resample
+	from utils import BaseProcessorFn, preprocess_samples, load_tokenizer, load_codec, train_test_split
 
 class ProcessorFn(BaseProcessorFn):
 
@@ -64,14 +62,13 @@ class ProcessorFn(BaseProcessorFn):
 		text_tk = self.extract_text_tokens(x['label'])
 		return self._combine_tokens(x_0=audio_tk, x_1=text_tk, pad_token_id=self.pad_token_id, extra_pad=self.extra_pad, pad_to_max_length=False)
 
-def load_ds(hf_repo="rpmon/fma-genre-classification", preprocess_fn=preprocess_samples, label_key='label', **kwargs):
+def load_ds(hf_repo="vtsouval/flusense", preprocess_fn=preprocess_samples, label_key='label', **kwargs):
+	_exclude_labels = {"etc", "vomit", "snore", "wheeze"}
+	_exclude_indices = [7, 37, 53, 55, 57, 59, 61, 80, 82, 383, 419, 425, 435, 442, 448, 527, 530, 536, 609, 617, 655, 762, 1211, 1398, 1421, 1430, 1431, 1443, 1445, 1447, 1490, 1555, 1777, 1788, 1801, 1819, 1858, 1864, 1892, 1927, 1972, 1978, 2032, 2202, 2256, 2554, 2627, 2641, 2693, 2739, 2743, 2745, 2754, 2755, 2853, 2883, 3017, 3083, 3085, 3087, 3104, 3120, 3131, 3195, 3229, 3231, 3286, 3304, 3323, 3372, 3485, 3490, 3509, 3654, 3688, 3702, 3704, 3706, 3713, 3714, 3971, 4028, 4080, 4154, 4158, 4163, 4193, 4248, 4286, 4362, 4364, 4391, 4403, 4433, 4439, 4445, 4449, 4724, 4736, 4833, 4946, 5097, 5440, 5557, 5578, 5633, 5692, 5993, 6053, 6056, 6059, 6239, 6244, 6245, 6246, 6249, 6258, 6402, 6577, 6616, 6648, 6660, 6691, 6876, 6913, 6924, 7028, 7079, 7291, 7784, 8169, 8209, 8215, 8217, 8232, 8374, 8379, 8406, 8410, 8414, 8416, 8417, 8419, 8538, 8560, 8566, 8599, 8604, 9115, 9470, 9478, 9556, 9642, 9646, 9656, 9708, 10051, 10052, 10116, 10447, 10449, 10655, 10657, 10661, 11131, 11660]
 	ds = datasets.load_dataset(hf_repo, trust_remote_code=True)
-	ds["train"] = ds["train"].select(sorted(set(range(len(ds["train"]))) - {956, 957, 1096, 1097, 1555, 1914, 2383, 3132, 3678, 3679, 5948, 5956})) # Corrupted samples
-	ds["validation"] = ds["validation"].select(sorted(set(range(len(ds["validation"]))) - {162, 273, 274, 522})) # Corrupted samples
-	_map = ds["train"].features["genre"]
-	ds = ds.map(lambda x: {label_key: _map.int2str(x["genre"])})
-	ds = datasets.DatasetDict({'train': ds['train'], 'test': ds['validation']})
-	ds = train_test_split(ds, label_key=label_key)
+	ds['train'] = ds['train'].select([i for i in range(len(ds['train'])) if i not in _exclude_indices])
+	ds = ds.filter(lambda x: x[label_key] not in _exclude_labels)
+	ds = train_test_split(ds, label_key=label_key, test_size=0.1, format_to_torch=False)
 	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', label_key]])
 	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', label_key]])
 	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', label_key]])
@@ -80,8 +77,9 @@ def load_ds(hf_repo="rpmon/fma-genre-classification", preprocess_fn=preprocess_s
 	return ds, class_names
 
 if __name__ == "__main__":
-	ds, class_names = load_ds(hf_repo="rpmon/fma-genre-classification")
+	ds, class_names = load_ds(hf_repo="vtsouval/flusense")
 	audio_codec, tokenizer = load_codec(), load_tokenizer()
 	preprocess_fn = ProcessorFn(class_names, audio_codec, tokenizer)
 	ds = ds.map(preprocess_fn, remove_columns=["waveform", "label"], batched=False).with_format("torch")
-	ds.save_to_disk("../fma")
+	ds.save_to_disk("../flusense")
+

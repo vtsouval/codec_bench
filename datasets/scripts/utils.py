@@ -10,20 +10,28 @@ from sklearn.model_selection import train_test_split as _train_test_split
 from scipy.signal import resample
 
 DATASET_PROMPT = {
-	'arca23k-fsd': "Identify the sound event present in the following audio segment.",
+    # Speech
 	'audiomnist': "Identify the spoken digit in the following audio recording.",
 	'cremad': "Classify the emotion expressed in the following speech audio.",
 	'emovo': "Classify the emotion expressed in the following speech audio.",
-	'esc50': "Classify the environmental sound in the following audio recording.",
-	'fma': "Classify the musical genre of the following audio segment.",
-	'fsd50k': "Identify the sound event present in the following audio segment.",
-	'gtzan': "Classify the musical genre of the following audio segment.",
-	'medley-solos-db': "Identify the musical instrument being played in the following audio segment.",
 	'ravdess': "Classify the emotion expressed in the following speech audio.",
+	'iemocap': "Classify the emotion expressed in the following speech audio.",
 	'slurp': "Determine the intent behind the spoken command in the following audio segment.",
-	'timit': "Identify the speaker's dialect region based on the following audio sample.",
+	'timit-dialect': "Identify the speaker's dialect region based on the following audio sample.",
+	'vctk': "Identify the speaker's identity based on the following audio sample.",
+	# Paralinguistic / Environmental
+	'esc50': "Classify the environmental sound in the following audio recording.",
 	'us8k': "Classify the urban sound present in the following audio recording.",
+	'arca23k-fsd': "Identify the sound event present in the following audio segment.",
+	'fsd50k': "Identify the sound event present in the following audio segment.",
 	'vivae': "Classify the vocal emotion expressed in the following audio recording.",
+	'flusense': "Identify illness-related sounds such as cough or sneeze in the following audio segment.",
+	# MUSIC
+	'medley-solos-db': "Identify the musical instrument being played in the following audio segment.",
+	'fma': "Classify the musical genre of the following audio segment.",
+	'gtzan': "Classify the musical genre of the following audio segment.",
+	'mgt_genre': "Classify the musical genre of the following audio segment.",
+	'mgt_mood': "Classify the mood expressed in the following music segment.",
 }
 
 def load_codec(model="HKUSTAudio/xcodec2"):

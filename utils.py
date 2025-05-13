@@ -29,7 +29,7 @@ def load_tokenizer(model="HKUSTAudio/Llasa-1B-Multilingual", max_length=128):
 	tokenizer.text_vocab_size = 128000
 	tokenizer.speech_vocab_size = 65536
 	tokenizer.reserved_tokens = 263
-	tokenizer._vocab_size = 193800
+	tokenizer.vocab_size_override = 193800
 	return tokenizer
 
 def load_model(model="HKUSTAudio/Llasa-1B-Multilingual", device="auto", grad_ckpt=True, quant_cfg=None):

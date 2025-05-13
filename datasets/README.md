@@ -1,4 +1,4 @@
-# 📚 ARCH Benchmark Datasets
+# 📚 ARCH Benchmark (extended!)
 
 ## ✅ Integrated Datasets
 
@@ -7,12 +7,15 @@
 - [x] FMA-small — Music genre classification
 - [x] GTZAN — Music genre classification
 - [x] Medley-solos-DB — Instrument recognition
+- [ ] MTG-Jamendo (Genre) — Single-label genre classification
+- [ ] MTG-Jamendo (Mood) — Single-label mood classification
 
 ### 🗣️ Speech
 
 - [x] AudioMNIST — Digit classification
 - [x] SLURP — Spoken language understanding (intent classification)
 - [x] TIMIT — Dialect region classification
+- [ ] VCTK — Speaker identification
 - [x] CREMA-D — Emotional speech (English)
 - [x] EMOVO — Emotional speech (Italian)
 - [x] RAVDESS — Emotional speech and song classification
@@ -21,19 +24,9 @@
 
 - [x] ESC-50 — Environmental sound classification
 - [x] US8K — Urban sound classification
-- [x] FSD50K — Human-labeled sound events
 - [x] ARCA23K-FSD — Sound event classification (subset of FSD50K)
 - [x] VIVAE — Affective non-speech vocalization classification
-
----
-
-### 📋 Upcoming Datasets (Planned Integration)
-
-#### 🎵 Music
-- [ ] MTG-Jamendo — Multi-label music tagging (genre, mood, instrumentation)
-
-#### 🗣️ Speech
-- [ ] IEMOCAP — Multimodal emotion recognition from speech and video
+- [x] FluSense — Illness-related sound detection (e.g., cough, sneeze)
 
 ---
 

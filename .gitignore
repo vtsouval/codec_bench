@@ -133,7 +133,8 @@ dist/
 archive/
 
 # Hide train logs
-assets/
+assets/*
+!assets/radar.png
 
 # Hide configs for now
 configs/

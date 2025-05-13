@@ -13,6 +13,7 @@ parser.add_argument("--save_dir", type=str, default="./assets", help="Directory 
 parser.add_argument("--ds_dir", type=str, default="./datasets", help="Path to the datasets directory")
 parser.add_argument("--ds_name", type=str, default="esc50", help="Dataset name")
 parser.add_argument("--batch_size", type=int, default=16, help="Batch size to be used in training")
+parser.add_argument("--eval_batch_size", type=int, default=4, help="Batch size to be used in training")
 parser.add_argument("--model_name", type=str, default="Llasa-1B", help="Model name")
 parser.add_argument("--codec_name", type=str, default="xcodec2", help="Codec name")
 parser.add_argument("--override", action="store_true", help="Whether to override existing outputs")
@@ -33,7 +34,7 @@ if __name__ == "__main__":
 	data = load_from_disk(f"{args.ds_dir}/{args.ds_name}")
 	data.set_format(type="torch")
 	train_ds = torch.utils.data.DataLoader(data["train"], batch_size=args.batch_size, shuffle=True, collate_fn=DataCollatorForTokenClassification(tokenizer, padding="longest"), pin_memory=True, num_workers=4)
-	eval_ds = torch.utils.data.DataLoader(data["test"], batch_size=args.batch_size, shuffle=False, collate_fn=DataCollatorForTokenClassification(tokenizer, padding="longest"), pin_memory=True, num_workers=4)
+	eval_ds = torch.utils.data.DataLoader(data["test"], batch_size=args.eval_batch_size, shuffle=False, collate_fn=DataCollatorForTokenClassification(tokenizer, padding="longest"), pin_memory=True, num_workers=4)
 	########################################################################################################################################################################
 
 	########################################################################################################################################################################

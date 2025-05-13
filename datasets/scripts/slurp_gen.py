@@ -1,5 +1,3 @@
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import torch
 import datasets
 try:
@@ -72,6 +70,8 @@ def load_ds(hf_repo="marcel-gohsen/slurp", preprocess_fn=preprocess_samples, lab
 	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', label_key]])
 	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', label_key]])
 	class_names = list(set(ds["train"][label_key]))
+	ds["val"] = ds["val"].filter(lambda x: x[label_key] in class_names)
+	ds["test"] = ds["test"].filter(lambda x: x[label_key] in class_names)
 	ds = ds.map(lambda x: preprocess_fn(x, label_key=label_key, one_hot_labels=False), remove_columns=ds["train"].column_names).with_format("torch")
 	return ds, class_names
 

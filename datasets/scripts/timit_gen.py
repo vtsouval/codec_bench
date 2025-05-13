@@ -1,6 +1,3 @@
-
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import torch
 import datasets
 try:
@@ -65,10 +62,12 @@ class ProcessorFn(BaseProcessorFn):
 		text_tk = self.extract_text_tokens(x['label'])
 		return self._combine_tokens(x_0=audio_tk, x_1=text_tk, pad_token_id=self.pad_token_id, extra_pad=self.extra_pad, pad_to_max_length=False)
 
-def load_ds(hf_repo="nh0znoisung/timit", preprocess_fn=preprocess_samples, label_key='dialect_region', **kwargs):
+def load_ds(hf_repo="nh0znoisung/timit", preprocess_fn=preprocess_samples, label_key='dialect', **kwargs):
 	_map = {"DR1": "New England", "DR2": "Northern", "DR3": "North Midland", "DR4": "South Midland", "DR5": "Southern", "DR6": "New York City", "DR7": "Western", "DR8": "Mixed"}
 	ds = datasets.load_dataset(hf_repo, trust_remote_code=True)
-	ds = ds.map(lambda x: {label_key: _map[x[label_key]]})
+	if label_key == 'dialect':
+		label_key = 'dialect_region'
+		ds = ds.map(lambda x: {label_key: _map[x[label_key]]})
 	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', label_key]])
 	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', label_key]])
 	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', label_key]])
@@ -77,10 +76,11 @@ def load_ds(hf_repo="nh0znoisung/timit", preprocess_fn=preprocess_samples, label
 	return ds, class_names
 
 if __name__ == "__main__":
-	ds, class_names = load_ds(hf_repo="nh0znoisung/timit")
+	label_key = 'dialect'
+	ds, class_names = load_ds(hf_repo="nh0znoisung/timit", label_key=label_key)
 	audio_codec, tokenizer = load_codec(), load_tokenizer()
 	preprocess_fn = ProcessorFn(class_names, audio_codec, tokenizer)
 	ds = ds.map(preprocess_fn, remove_columns=["waveform", "label"], batched=False).with_format("torch")
-	ds.save_to_disk("../timit_dialect")
+	ds.save_to_disk(f"../timit_{label_key}")
 
 

@@ -1,5 +1,3 @@
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import torch
 import datasets
 try:
@@ -9,7 +7,7 @@ except ImportError:
 
 class ProcessorFn(BaseProcessorFn):
 
-	def __init__(self, class_names, audio_codec, tokenizer, max_length=2048, prompt="Classify the audio in the following segment.", device="cuda", **kwargs):
+	def __init__(self, class_names, audio_codec, tokenizer, max_length=2048, prompt="Classify the audio in the following segment.", device="cpu", **kwargs):
 		super().__init__(max_length=max_length, **kwargs)
 		self._convert_classes_to_tokens(tokenizer, class_names, prompt)
 		self.device = device
@@ -66,10 +64,12 @@ class ProcessorFn(BaseProcessorFn):
 
 def load_ds(hf_repo="vtsouval/arca23k-fsd", preprocess_fn=preprocess_samples, label_key="action", **kwargs):
 	_map = {"Acoustic_guitar": "Acoustic guitar", "Bark": "Bark", "Bass_guitar": "Bass guitar", "Boom": "Boom", "Bowed_string_instrument": "Bowed string", "Burping_and_eructation": "Burping", "Camera": "Camera", "Chewing_and_mastication": "Chewing", "Child_speech_and_kid_speaking": "Child speech", "Clapping": "Clapping", "Coin_(dropping)": "Coin drop", "Computer_keyboard": "Keyboard", "Cough": "Cough", "Crack": "Crack", "Crackle": "Crackle", "Crash_cymbal": "Crash cymbal", "Cricket": "Cricket", "Crumpling_and_crinkling": "Crumpling", "Crushing": "Crushing", "Crying_and_sobbing": "Crying", "Dishes_and_pots_and_pans": "Kitchen sounds", "Drawer_open_or_close": "Drawer", "Drill": "Drill", "Electric_guitar": "Electric guitar", "Fart": "Fart", "Female_singing": "Female singing", "Female_speech_and_woman_speaking": "Female speech", "Finger_snapping": "Finger snap", "Giggle": "Giggle", "Gong": "Gong", "Gunshot_and_gunfire": "Gunshot", "Hammer": "Hammer", "Harp": "Harp", "Keys_jangling": "Keys", "Knock": "Knock", "Livestock_and_farm_animals_and_working_animals": "Farm animals", "Male_speech_and_man_speaking": "Male speech", "Meow": "Meow", "Microwave_oven": "Microwave", "Organ": "Organ", "Piano": "Piano", "Printer": "Printer", "Rattle": "Rattle", "Rattle_(instrument)": "Rattle instrument", "Run": "Running", "Sawing": "Sawing", "Scissors": "Scissors", "Scratching_(performance_technique)": "Scratching", "Screaming": "Screaming", "Skateboard": "Skateboard", "Slam": "Slam", "Snare_drum": "Snare drum", "Splash_and_splatter": "Splash", "Squeak": "Squeak", "Stream": "Stream", "Tap": "Tap", "Tearing": "Tearing", "Thump_and_thud": "Thump", "Toilet_flush": "Toilet flush", "Train": "Train", "Trumpet": "Trumpet", "Walk_and_footsteps": "Footsteps", "Water_tap_and_faucet": "Water tap", "Waves_and_surf": "Waves", "Whoosh_and_swoosh_and_swish": "Whoosh", "Wind": "Wind", "Wind_chime": "Wind chime", "Wind_instrument_and_woodwind_instrument": "Wind instrument", "Writing": "Writing", "Zipper_(clothing)": "Zipper"}
+	_too_long = {"train": [999, 1017, 5467, 5484, 5485, 8909, 9284], "val": [1204], "test": []}
 	ds = datasets.load_dataset(hf_repo)
 	label_feature = ds["train"].features["label"]
 	ds = ds.map(lambda x: {"full_name": label_feature.int2str(x["label"])})
 	ds = ds.map(lambda x: {label_key: _map[x["full_name"]]})
+	ds = datasets.DatasetDict({k: ds[k].select([i for i in range(len(ds[k])) if i not in _too_long[k]]) for k in ds})
 	ds['train'] = ds['train'].remove_columns([c for c in ds['train'].column_names if c not in ['audio', label_key]])
 	ds['val'] = ds['val'].remove_columns([c for c in ds['val'].column_names if c not in ['audio', label_key]])
 	ds['test'] = ds['test'].remove_columns([c for c in ds['test'].column_names if c not in ['audio', label_key]])
